@@ -310,15 +310,3 @@ rm -f *.pem *.key *.zuc *.txt
 
 本项目为研究用途构建，使用 GmSSL 项目作为底层加密引擎。请遵循 GmSSL 的使用与分发许可。
 
----
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request 来改进项目！
-
----
-
-## 📞 联系方式
-
-如有问题或建议，请通过 GitHub Issues 联系。
-
