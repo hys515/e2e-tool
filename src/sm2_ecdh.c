@@ -47,6 +47,7 @@ int sm2_derive_session_key(const char *privkey_path, const char *peer_pubkey_pat
     SM2_KEY local_key;
     SM2_KEY peer_key;
     uint8_t shared_key[64];
+    uint8_t peer_public_octets[65]; // 65字节的未压缩格式公钥
 
     // 读取私钥
     FILE *fp = fopen(privkey_path, "r");
@@ -74,10 +75,16 @@ int sm2_derive_session_key(const char *privkey_path, const char *peer_pubkey_pat
     }
     fclose(fp);
 
+    // 将 SM2_Z256_POINT 转换为字节数组格式
+    if (sm2_z256_point_to_uncompressed_octets(&peer_key.public_key, peer_public_octets) != 1) {
+        fprintf(stderr, "[-] Failed to convert public key to octets\n");
+        return -1;
+    }
+
     // ECDH
     if (sm2_ecdh(&local_key,
-                 (uint8_t *)peer_key.public_key, // 类型转换
-                 sizeof(peer_key.public_key),
+                 peer_public_octets, // 使用转换后的字节数组
+                 sizeof(peer_public_octets),
                  shared_key) != 1) {
         fprintf(stderr, "[-] SM2 ECDH key agreement failed\n");
         return -1;
