@@ -1,16 +1,23 @@
 # 编译产物
 e2e-tool
+test/test_sm2_ecdh
 *.o
 *.a
 *.dylib
 *.so
 *.zip
+
+# 密钥和证书文件
+*.pem
 *.key
 
+# 加密文件
+*.zuc
+*.cipher
+
 # 测试数据
-test/*.zuc
-test/*.cipher
-test/out/
+test/data/*
+!test/data/.gitkeep
 perf_test/
 bigfile*
 
@@ -18,6 +25,21 @@ bigfile*
 __pycache__/
 *.pyc
 
-# 测试产物
-test/data/*
-!test/data/.gitkeep
+# macOS 系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
