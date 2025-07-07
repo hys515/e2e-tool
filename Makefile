@@ -1,15 +1,15 @@
 CC = gcc
-CFLAGS = -I/usr/local/include
-LDFLAGS = /usr/local/lib/libgmssl.a -framework Security
-TARGET = e2e-tool
+CFLAGS = -Iinclude -Wall
+LDFLAGS = -lgmssl
 
-SRCS = main.c
-OBJS = $(SRCS:.c=.o)
+SRC = cli/main.c src/sm2_ecdh.c
+OBJ = $(SRC:.c=.o)
+TARGET = e2e-tool
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS)
+$(TARGET): $(OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -f $(TARGET) *.o
+	rm -f $(OBJ) $(TARGET)
