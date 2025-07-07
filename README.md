@@ -22,12 +22,16 @@ e2e_tool/
 │   ├── test_sm2_ecdh     # 测试可执行文件
 │   └── data/             # 测试过程中产生的所有临时文件
 │       └── .gitkeep      # 保持空目录可提交
+├── .vscode/              # VSCode 配置
+│   └── tasks.json        # 构建任务配置
 ├── e2e-tool              # 主可执行文件（静态链接 GmSSL）
-├── Makefile              # 构建配置
+├── Makefile              # Linux/macOS 构建配置
+├── Makefile.windows      # Windows 构建配置
+├── CMakeLists.txt        # 跨平台 CMake 构建配置
+├── build.bat             # Windows 便捷构建脚本
 ├── package.sh            # 打包脚本
 ├── README.md             # 项目文档
-├── .gitignore           # Git 忽略配置
-└── test_perf.py         # 性能测试脚本（已移至 test/）
+└── .gitignore           # Git 忽略配置
 ```
 
 **特点：**
@@ -40,11 +44,14 @@ e2e_tool/
 ## 🛠️ 构建方法
 
 ### 环境要求
-- macOS 或 Linux 系统
-- GCC 编译器
+- **macOS/Linux**: GCC 编译器
+- **Windows**: MinGW-w64 或 Visual Studio
 - Python 3（仅性能测试需要）
+- GmSSL 库（需要预先安装）
 
 ### 编译步骤
+
+#### macOS/Linux 环境
 
 ```bash
 # 1. 编译主程序
@@ -59,6 +66,56 @@ make clean
 # 4. 打包分发
 ./package.sh
 ```
+
+#### Windows 环境
+
+**方法一：使用 MinGW-w64**
+```cmd
+# 1. 安装 MinGW-w64 和 Make
+# 2. 编译主程序
+mingw32-make -f Makefile.windows
+
+# 3. 编译测试程序
+mingw32-make -f Makefile.windows test
+
+# 4. 清理编译产物
+mingw32-make -f Makefile.windows clean
+```
+
+**方法二：使用 CMake（推荐）**
+```cmd
+# 1. 创建构建目录
+mkdir build
+cd build
+
+# 2. 配置项目
+cmake ..
+
+# 3. 编译
+cmake --build .
+
+# 4. 运行测试
+ctest
+```
+
+**方法三：使用 Visual Studio**
+```cmd
+# 1. 打开 Developer Command Prompt
+# 2. 使用 CMake 生成 Visual Studio 项目
+cmake -G "Visual Studio 16 2019" -A x64 ..
+
+# 3. 编译
+cmake --build . --config Release
+```
+
+#### VSCode 集成
+
+项目包含 VSCode 任务配置，支持以下快捷操作：
+
+- `Ctrl+Shift+P` → `Tasks: Run Task` → `build`：编译主程序
+- `Ctrl+Shift+P` → `Tasks: Run Task` → `build-test`：编译测试程序
+- `Ctrl+Shift+P` → `Tasks: Run Task` → `run-test`：运行测试
+- `Ctrl+Shift+P` → `Tasks: Run Task` → `cmake-compile`：使用 CMake 编译
 
 ### Makefile 目标说明
 
@@ -299,10 +356,48 @@ rm -f *.pem *.key *.zuc *.txt
 - 支持 PEM 格式密钥文件
 - 64 字节（512 位）会话密钥输出
 
+### 跨平台支持
+- **macOS**: 原生支持，使用 Security Framework
+- **Linux**: 标准 POSIX 接口
+- **Windows**: 支持 MinGW-w64、MSVC、CMake 构建
+- **IDE 集成**: VSCode 任务配置，支持一键编译测试
+
 ### 性能特性
 - 支持大文件加密（测试到 4MB）
 - 流式加密，内存占用恒定
 - 加密解密性能对称
+
+---
+
+## 🚀 快速开始
+
+### Windows 用户
+```cmd
+# 1. 双击运行构建脚本
+build.bat
+
+# 2. 或使用 CMake
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
+
+### macOS/Linux 用户
+```bash
+# 1. 编译
+make
+
+# 2. 测试
+make test && ./test/test_sm2_ecdh
+
+# 3. 使用
+./e2e-tool gen-keys -priv key.pem -pub key_pub.pem
+```
+
+### VSCode 用户
+1. 打开项目文件夹
+2. `Ctrl+Shift+P` → `Tasks: Run Task` → `build`
+3. `Ctrl+Shift+P` → `Tasks: Run Task` → `run-test`
 
 ---
 

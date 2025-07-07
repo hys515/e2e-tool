@@ -1,0 +1,60 @@
+# Windows Makefile for e2e-tool
+# 支持 MinGW 和 MSVC 编译器
+
+# 检测编译器
+ifeq ($(CC),)
+    # 尝试检测可用的编译器
+    ifeq ($(shell where gcc 2>nul),)
+        ifeq ($(shell where cl 2>nul),)
+            # 默认使用 MinGW
+            CC = gcc
+        else
+            # 使用 MSVC
+            CC = cl
+        endif
+    else
+        # 使用 MinGW
+        CC = gcc
+    endif
+endif
+
+# 编译器特定设置
+ifeq ($(findstring cl,$(CC)),cl)
+    # MSVC 设置
+    CFLAGS = /Iinclude /I"C:\Program Files\GmSSL\include" /W3
+    LDFLAGS = "C:\Program Files\GmSSL\lib\gmssl.lib" ws2_32.lib
+    TARGET = e2e-tool.exe
+    TEST_TARGET = test\test_sm2_ecdh.exe
+    RM = del /Q
+    MKDIR = mkdir
+    RMDIR = rmdir /S /Q
+else
+    # MinGW 设置
+    CFLAGS = -Iinclude -I"C:\Program Files\GmSSL\include" -Wall
+    LDFLAGS = "C:\Program Files\GmSSL\lib\libgmssl.a" -lws2_32
+    TARGET = e2e-tool.exe
+    TEST_TARGET = test/test_sm2_ecdh.exe
+    RM = del /Q
+    MKDIR = mkdir
+    RMDIR = rmdir /S /Q
+endif
+
+SRCS = cli/main.c src/sm2_ecdh.c
+OBJS = $(SRCS:.c=.o)
+TEST_SRCS = test/test_sm2_ecdh.c src/sm2_ecdh.c
+TEST_OBJS = $(TEST_SRCS:.c=.o)
+
+all: $(TARGET)
+
+test: $(TEST_TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+$(TEST_TARGET): $(TEST_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+clean:
+	$(RM) $(TARGET) $(TEST_TARGET) $(OBJS) $(TEST_OBJS) 2>nul || true
+
+.PHONY: all test clean 
