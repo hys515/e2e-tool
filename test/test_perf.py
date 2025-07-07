@@ -11,9 +11,9 @@ print(f"{'Size (bytes)':>12} | {'Enc Time (ms)':>14} | {'Dec Time (ms)':>14} | {
 print("-" * 55)
 
 for size in lengths:
-    infile = f"perf_test/input_{size}.txt"
-    cipherfile = f"perf_test/cipher_{size}.zuc"
-    recovered = f"perf_test/recovered_{size}.txt"
+    infile = f"test/data/input_{size}.txt"
+    cipherfile = f"test/data/cipher_{size}.zuc"
+    recovered = f"test/data/recovered_{size}.txt"
 
     # 生成指定长度的随机明文
     with open(infile, "wb") as f:

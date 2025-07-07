@@ -17,3 +17,7 @@ bigfile*
 # Python 缓存
 __pycache__/
 *.pyc
+
+# 测试产物
+test/data/*
+!test/data/.gitkeep
