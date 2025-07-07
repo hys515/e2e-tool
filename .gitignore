@@ -1,0 +1,19 @@
+# 编译产物
+e2e-tool
+*.o
+*.a
+*.dylib
+*.so
+*.zip
+*.key
+
+# 测试数据
+test/*.zuc
+test/*.cipher
+test/out/
+perf_test/
+bigfile*
+
+# Python 缓存
+__pycache__/
+*.pyc
