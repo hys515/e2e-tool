@@ -85,6 +85,26 @@ def extract_binary_from_pdf(input_pdf, metadata_key="/HiddenData"):
     except zlib.error:
         return binary_data
 
+def embed_message(input_path, output_path, message: bytes):
+    """
+    统一接口：在PDF input_path 中嵌入 message，输出到 output_path
+    自动在数据前加4字节长度头部
+    """
+    length_bytes = len(message).to_bytes(4, 'big')
+    full_message = length_bytes + message
+    return embed_binary_in_pdf(input_path, full_message, output_pdf=output_path)
+
+def extract_message(stego_path) -> bytes:
+    """
+    统一接口：从PDF stego_path 中提取嵌入的消息
+    自动解析前4字节长度
+    """
+    full_data = extract_binary_from_pdf(stego_path)
+    if len(full_data) < 4:
+        raise ValueError("提取数据长度不足4字节，无法解析长度头部")
+    data_length = int.from_bytes(full_data[:4], 'big')
+    return full_data[4:4+data_length]
+
 def calculate_sha256(data):
     """计算数据的 SHA-256 哈希值"""
     sha256_hash = hashlib.sha256()
@@ -103,8 +123,8 @@ if __name__ == "__main__":
             binary_data = f.read()
         print(f"要嵌入的文件: {BINARY_FILE} ({len(binary_data):,} 字节)")
 
-        embed_binary_in_pdf(ORIGINAL_PDF, binary_data, OUTPUT_PDF)
-        extracted_data = extract_binary_from_pdf(OUTPUT_PDF)
+        embed_message(ORIGINAL_PDF, OUTPUT_PDF, binary_data)
+        extracted_data = extract_message(OUTPUT_PDF)
         with open(EXTRACTED_FILE, 'wb') as f:
             f.write(extracted_data)
         print(f"\n验证结果:")

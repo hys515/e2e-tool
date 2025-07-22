@@ -82,6 +82,48 @@ def decrypt_message(session_key, msg):
     plaintext = bytes([a ^ b for a, b in zip(ciphertext, keystream)])
     return plaintext.decode()
 
+def send_file(sock, filepath, filetype, from_user, to_user):
+    filesize = os.path.getsize(filepath)
+    filename = os.path.basename(filepath)
+    fileinfo = {
+        "type": "file",
+        "filename": filename,
+        "filetype": filetype,  # image/pdf/video
+        "filesize": filesize,
+        "from": from_user,
+        "to": to_user
+    }
+    sock.sendall((json.dumps(fileinfo) + '\n').encode())
+    with open(filepath, 'rb') as f:
+        while True:
+            chunk = f.read(4096)
+            if not chunk:
+                break
+            sock.sendall(chunk)
+    print(f"[系统] 文件已发送: {filename}")
+
+def recv_file(sock, save_dir):
+    # 1. 读取文件头
+    fileinfo_line = b''
+    while not fileinfo_line.endswith(b'\n'):
+        fileinfo_line += sock.recv(1)
+    fileinfo = json.loads(fileinfo_line.decode())
+    filesize = fileinfo['filesize']
+    filename = fileinfo['filename']
+    save_path = os.path.join(save_dir, filename)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    # 2. 读取文件内容
+    with open(save_path, 'wb') as f:
+        remaining = filesize
+        while remaining > 0:
+            chunk = sock.recv(min(4096, remaining))
+            if not chunk:
+                break
+            f.write(chunk)
+            remaining -= len(chunk)
+    print(f"[系统] 文件已接收并保存为 {save_path}")
+    return save_path, fileinfo
+
 def recv_thread(sock, username, state):
     buffer = ""
     while True:
@@ -94,7 +136,39 @@ def recv_thread(sock, username, state):
             while '\n' in buffer:
                 line, buffer = buffer.split('\n', 1)
                 msg = line.strip()
-                if msg.startswith("[KEYEXCHANGE]"):
+                # 检查是否有 [peer] 前缀
+                peer_prefix = None
+                if msg.startswith("[") and "] " in msg:
+                    end_idx = msg.find("] ")
+                    peer_prefix = msg[1:end_idx]
+                    msg_body = msg[end_idx+2:]
+                else:
+                    msg_body = msg
+                # 优先判断 JSON 消息
+                if msg_body.startswith("{") and msg_body.endswith("}"):
+                    try:
+                        msg_obj = json.loads(msg_body)
+                        if msg_obj.get('type') == 'msg':
+                            peer = msg_obj['from'] if not peer_prefix else peer_prefix
+                            session_key = load_session_key(username, peer)
+                            try:
+                                plaintext = decrypt_message(session_key, msg_obj['content'])
+                                print(f"[{peer}] {plaintext}")
+                            except Exception as e:
+                                print(f"[系统] 解密失败: {e}")
+                        elif msg_obj.get('type') == 'user_list':
+                            print(f"[系统] 在线用户: {', '.join(msg_obj['users'])}")
+                        elif msg_obj.get('type') == 'file':
+                            peer = msg_obj['from'] if not peer_prefix else peer_prefix
+                            save_dir = os.path.join(os.path.dirname(__file__), '..', 'received_files')
+                            os.makedirs(save_dir, exist_ok=True)
+                            recv_file(sock, save_dir)
+                        else:
+                            print(f"[系统] 未知JSON消息: {msg_obj}")
+                    except Exception:
+                        print(f"[系统] 无法解析JSON消息: {msg_body}")
+                # 其它类型消息
+                elif msg.startswith("[KEYEXCHANGE]"):
                     _, peer, peer_pub = msg.split(":", 2)
                     priv, pub = ensure_sm2_keypair(username)
                     sm2_crypt = sm2.CryptSM2(public_key=peer_pub, private_key=priv)
@@ -116,19 +190,6 @@ def recv_thread(sock, username, state):
                     print(msg)
                 elif msg:
                     print(msg)
-                elif msg.startswith("{") and msg.endswith("}"):
-                    try:
-                        msg_obj = json.loads(msg)
-                        if msg_obj.get('type') == 'msg':
-                            peer = msg_obj['from']
-                            session_key = load_session_key(username, peer)
-                            try:
-                                plaintext = decrypt_message(session_key, msg_obj['content'])
-                                print(f"[{peer}] {plaintext}")
-                            except Exception as e:
-                                print(f"[系统] 解密失败: {e}")
-                    except Exception:
-                        print(f"[系统] 无法解析JSON消息: {msg}")
         except OSError as e:
             if e.errno == errno.EBADF:
                 break

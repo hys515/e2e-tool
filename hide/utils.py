@@ -26,24 +26,32 @@ def get_extracted_image_path(filename):
     return os.path.join(IMAGES_EXTRACTED, filename)
 
 # PDF相关
+PDFS_RESOURCES = os.path.join(RESOURCES_DIR, 'pdfs')
+PDFS_OUTPUT = os.path.join(OUTPUT_DIR, 'pdfs')
+PDFS_EXTRACTED = os.path.join(EXTRACTED_DIR, 'pdfs')
+
 def get_pdf_path(filename):
-    return os.path.join(RESOURCES_DIR, 'pdfs', filename)
+    return os.path.join(PDFS_RESOURCES, filename)
 
 def get_output_pdf_path(filename):
-    return os.path.join(OUTPUT_DIR, 'pdfs', filename)
+    return os.path.join(PDFS_OUTPUT, filename)
 
 def get_extracted_pdf_path(filename):
-    return os.path.join(EXTRACTED_DIR, 'pdfs', filename)
+    return os.path.join(PDFS_EXTRACTED, filename)
 
 # 视频相关
+VIDEOS_RESOURCES = os.path.join(RESOURCES_DIR, 'videos')
+VIDEOS_OUTPUT = os.path.join(OUTPUT_DIR, 'videos')
+VIDEOS_EXTRACTED = os.path.join(EXTRACTED_DIR, 'videos')
+
 def get_video_path(filename):
-    return os.path.join(RESOURCES_DIR, 'videos', filename)
+    return os.path.join(VIDEOS_RESOURCES, filename)
 
 def get_output_video_path(filename):
-    return os.path.join(OUTPUT_DIR, 'videos', filename)
+    return os.path.join(VIDEOS_OUTPUT, filename)
 
 def get_extracted_video_path(filename):
-    return os.path.join(EXTRACTED_DIR, 'videos', filename)
+    return os.path.join(VIDEOS_EXTRACTED, filename)
 
 # 通用二进制文件（如密文）
 def get_output_bin_path(filename):

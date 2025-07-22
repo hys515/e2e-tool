@@ -101,6 +101,28 @@ def extract_data(image_path, data_length_bytes, n_bits=1):
             data_bytes.append(int(byte, 2))
 
     return bytes(data_bytes)
+
+def embed_message(input_path, output_path, message: bytes, n_bits=1):
+    """
+    统一接口：在图片 input_path 中嵌入 message，输出到 output_path
+    自动在数据前加4字节长度头部
+    """
+    length_bytes = len(message).to_bytes(4, 'big')
+    full_message = length_bytes + message
+    return embed_data(input_path, full_message, output_path, n_bits=n_bits)
+
+def extract_message(stego_path, n_bits=1) -> bytes:
+    """
+    统一接口：从图片 stego_path 中提取嵌入的消息
+    自动解析前4字节长度
+    """
+    # 先提取前4字节长度
+    length_bytes = extract_data(stego_path, 4, n_bits=n_bits)
+    data_length = int.from_bytes(length_bytes, 'big')
+    # 再提取实际数据
+    full_data = extract_data(stego_path, 4 + data_length, n_bits=n_bits)
+    return full_data[4:]
+
 def print_file_size(file_path):
     """
     打印文件大小
@@ -134,8 +156,8 @@ if __name__ == "__main__":
 
     with open(BINARY_FILE, 'rb') as f:
         encrypted_data = f.read()
-    embed_data(ORIGINAL_IMAGE, encrypted_data, EMBEDDED_IMAGE, n_bits=N_BITS)
-    extracted_data = extract_data(EMBEDDED_IMAGE, len(encrypted_data), n_bits=N_BITS)
+    embed_message(ORIGINAL_IMAGE, EMBEDDED_IMAGE, encrypted_data, n_bits=N_BITS)
+    extracted_data = extract_message(EMBEDDED_IMAGE, n_bits=N_BITS)
     with open(EXTRACTED_FILE, 'wb') as f:
         f.write(extracted_data)
     print("数据是否一致:", extracted_data == encrypted_data)
