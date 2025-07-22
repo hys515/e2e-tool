@@ -3,6 +3,7 @@ from PyPDF2 import PdfReader, PdfWriter
 import binascii
 import zlib
 import hashlib
+from hide.utils import get_pdf_path, get_output_pdf_path, get_extracted_pdf_path
 
 def calculate_size_limit(original_size, tolerance=0.05):
     """计算允许的最大嵌入数据量（±tolerance）"""
@@ -90,32 +91,25 @@ def calculate_sha256(data):
     sha256_hash.update(data)
     return sha256_hash.hexdigest()
 
-# 示例用法
 if __name__ == "__main__":
-     # 配置路径
-    original_pdf = "/Users/tangtang/Documents/ZUC端到端加密隐藏部分/hide/original_1-2.pdf"
-    output_pdf = "/Users/tangtang/Documents/ZUC端到端加密隐藏部分/hide/embedded.pdf"
-    binary_file = "/Users/tangtang/Documents/ZUC端到端加密隐藏部分/hide/cipher_128.bin"  # 要隐藏的二进制文件
-    extracted_file = "hide/extracted/pdfs/extracted_data_from_embedded.pdf.bin"
+    # 固定路径
+    ORIGINAL_PDF = get_pdf_path("cover.pdf")
+    BINARY_FILE = get_output_pdf_path("secret.bin")
+    OUTPUT_PDF = get_output_pdf_path("cover_embedded.pdf")
+    EXTRACTED_FILE = get_extracted_pdf_path("extracted_secret.bin")
 
     try:
-        # 1. 读取二进制文件
-        with open(binary_file, 'rb') as f:
+        with open(BINARY_FILE, 'rb') as f:
             binary_data = f.read()
-        print(f"要嵌入的文件: {binary_file} ({len(binary_data):,} 字节)")
+        print(f"要嵌入的文件: {BINARY_FILE} ({len(binary_data):,} 字节)")
 
-        # 2. 嵌入到PDF（自动控制大小）
-        embed_binary_in_pdf(original_pdf, binary_data, output_pdf)
-
-        # 3. 提取验证
-        extracted_data = extract_binary_from_pdf(output_pdf)
-        with open(extracted_file, 'wb') as f:
+        embed_binary_in_pdf(ORIGINAL_PDF, binary_data, OUTPUT_PDF)
+        extracted_data = extract_binary_from_pdf(OUTPUT_PDF)
+        with open(EXTRACTED_FILE, 'wb') as f:
             f.write(extracted_data)
-        
         print(f"\n验证结果:")
         print(f"原始数据 SHA-256: {calculate_sha256(binary_data)}")
         print(f"提取数据 SHA-256: {calculate_sha256(extracted_data)}")
-        print("数据一致:", binary_data == extracted_data)
-
+        print("数据是否一致:", binary_data == extracted_data)
     except Exception as e:
         print(f"\n错误: {str(e)}")

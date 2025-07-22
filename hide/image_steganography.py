@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import os
 from skimage.metrics import structural_similarity as ssim
+from hide.utils import get_image_path, get_output_image_path, get_extracted_image_path
+
 def embed_data(image_path, data_bytes, output_path, n_bits=1):
     """
     将二进制数据嵌入到图片中
@@ -121,34 +123,19 @@ def calculate_ssim(img1, img2):
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     return ssim (gray1, gray2, data_range=gray2.max() - gray2.min() )
+
 if __name__ == "__main__":
-    # 加密后的二进制数据
-    bin_files = ['cipher_16384.bin']  # 数据列表
+    # 固定路径
+    ORIGINAL_IMAGE = get_image_path("cover.png")
+    BINARY_FILE = get_output_image_path("secret.bin")
+    EMBEDDED_IMAGE = get_output_image_path("cover_embedded.png")
+    EXTRACTED_FILE = get_extracted_image_path("extracted_secret.bin")
+    N_BITS = 1
 
-    # 使用绝对路径
-    original_image_path = '/Users/tangtang/Documents/ZUC端到端加密隐藏部分/hide/original.png'
-    embedded_image_path = '/Users/tangtang/Documents/ZUC端到端加密隐藏部分/hide/embedded.png'
-    # 打印原始图像文件大小
-    print("原始图像文件大小:")
-    print_file_size(original_image_path)
-
-    # 依次嵌入数据
-    for bin_file in bin_files:
-        bin_file_path = os.path.join(os.path.dirname(__file__), bin_file)
-        with open(bin_file_path, 'rb') as f:
-            encrypted_data = f.read()
-
-        # 嵌入数据
-        embed_data(original_image_path, encrypted_data, embedded_image_path, n_bits=1)
-        # 嵌入数据并获取质量指标
-        psnr, ssim_val = embed_data(original_image_path, encrypted_data, embedded_image_path, n_bits=1)
-        # 打印嵌入后图像文件大小
-        print("嵌入后图像文件大小:")
-        print_file_size(embedded_image_path)
-
-        # 提取数据（注意：提取时需要知道原始数据长度）
-        extracted_data = extract_data(embedded_image_path, len(encrypted_data), n_bits=1)
-
-        # 验证提取结果
-        print("提取的数据:", extracted_data)
-        print("数据是否一致:", extracted_data == encrypted_data)
+    with open(BINARY_FILE, 'rb') as f:
+        encrypted_data = f.read()
+    embed_data(ORIGINAL_IMAGE, encrypted_data, EMBEDDED_IMAGE, n_bits=N_BITS)
+    extracted_data = extract_data(EMBEDDED_IMAGE, len(encrypted_data), n_bits=N_BITS)
+    with open(EXTRACTED_FILE, 'wb') as f:
+        f.write(extracted_data)
+    print("数据是否一致:", extracted_data == encrypted_data)

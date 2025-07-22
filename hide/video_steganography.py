@@ -3,16 +3,16 @@ import numpy as np
 import subprocess
 import os
 import time
+from hide.utils import get_video_path, get_output_video_path, get_extracted_video_path
 
-# 常量配置（修改为您的实际路径）
-INPUT_VIDEO = '/Users/tangtang/Documents/ZUC/hide/input3.mp4'        # 输入视频路径
-OUTPUT_VIDEO = '/Users/tangtang/Documents/ZUC/hide/output_with_hidden_data.avi'      # 输出视频路径
-DATA_FILE = '/Users/tangtang/Documents/ZUC/hide/cipher_16384.bin'         # 要隐藏的二进制文件
-EXTRACTED_FILE = '/Users/tangtang/Documents/ZUC/hide/extracted.bin' # 提取结果保存路径
+# 固定路径配置
+INPUT_VIDEO = get_video_path('input.mp4')
+OUTPUT_VIDEO = get_output_video_path('output_with_hidden_data.avi')
+DATA_FILE = get_output_video_path('secret.bin')
+EXTRACTED_FILE = get_extracted_video_path('extracted_secret.bin')
 
 def ffv1_embed(input_video, data_file, output_video):
     """使用FFV1编码的极速隐写方案"""
-    
     # 1. 读取并处理第一帧
     start_time = time.time()
     cap = cv2.VideoCapture(input_video)
@@ -26,7 +26,6 @@ def ffv1_embed(input_video, data_file, output_video):
     start_time = time.time()
     with open(data_file, 'rb') as f:
         data_bits = np.unpackbits(np.frombuffer(f.read(), dtype=np.uint8))
-    
     frame_flat = frame.flatten()
     bits_needed = min(len(data_bits), len(frame_flat))
     frame_flat[:bits_needed] = (frame_flat[:bits_needed] & 0xFE) | data_bits[:bits_needed]
@@ -43,10 +42,8 @@ def ffv1_embed(input_video, data_file, output_video):
     height, width = frame.shape[:2]
     fourcc = cv2.VideoWriter_fourcc(*'FFV1')  # 修改为FFV1
     writer = cv2.VideoWriter('temp.avi', fourcc, 30, (width, height), isColor=True)
-    
     if not writer.isOpened():
         raise RuntimeError("FFV1编码器初始化失败，请检查OpenCV支持")
-    
     writer.write(embedded_frame)
     writer.release()
     print(f"使用FFV1编码耗时: {time.time() - start_time:.2f} 秒")
@@ -80,27 +77,18 @@ def verify_embedding(original_video, embedded_video, data_file):
     cap = cv2.VideoCapture(embedded_video)
     ret, frame = cap.read()
     cap.release()
-    
     # 提取LSB
     extracted_bits = (frame.flatten() & 1)[:os.path.getsize(data_file)*8]
-    
     # 对比原始数据
     with open(data_file, 'rb') as f:
         original_bits = np.unpackbits(np.frombuffer(f.read(), dtype=np.uint8))
-    
     mismatch = np.sum(extracted_bits != original_bits)
     print(f"数据校验: {mismatch}位不匹配" if mismatch else "✅ 数据完全匹配")
-    
-    # 输出嵌入的bits和提取出的bits
-    print(f"嵌入的bits: {original_bits[:32]}...")  # 输出前32位用于调试
-    print(f"提取的bits: {extracted_bits[:32]}...")  # 输出前32位用于调试
-    
-    # 计算提取时间
+    print(f"嵌入的bits: {original_bits[:32]}...")
+    print(f"提取的bits: {extracted_bits[:32]}...")
     extraction_time = time.time() - start_time
-    #使用了嵌入数据文件大小
     data_size_bytes = os.path.getsize(data_file)
     extraction_rate = data_size_bytes / extraction_time
-    
     print(f"提取数据耗时: {extraction_time:.2f} 秒")
     print(f"提取速率: {extraction_rate:.2f} 字节/秒")
 
