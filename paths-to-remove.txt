@@ -1,0 +1,2 @@
+hide/output/videos/input3.avi
+hide/resources/videos/input3.mp4

@@ -19,6 +19,23 @@ test/test_sm2_ecdh.exe
 *.zuc
 *.cipher
 
+# 信息隐藏原始资源和输出（不上传，仅保留 .gitkeep）
+hide/resources/*
+!hide/resources/.gitkeep
+!hide/resources/images/.gitkeep
+!hide/resources/pdfs/.gitkeep
+!hide/resources/videos/.gitkeep
+hide/output/*
+!hide/output/.gitkeep
+!hide/output/images/.gitkeep
+!hide/output/pdfs/.gitkeep
+!hide/output/videos/.gitkeep
+hide/extracted/*
+!hide/extracted/.gitkeep
+!hide/extracted/images/.gitkeep
+!hide/extracted/pdfs/.gitkeep
+!hide/extracted/videos/.gitkeep
+
 # 测试数据
 test/data/*
 !test/data/.gitkeep
