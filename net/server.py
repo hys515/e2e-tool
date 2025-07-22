@@ -2,14 +2,13 @@ import socket
 import threading
 import json
 
-HOST = '0.0.0.0'  # 监听所有网卡
-PORT = 50000      # 端口号，可自定义
+HOST = '0.0.0.0'
+PORT = 50000
 
 clients = {}  # username -> (conn, addr)
 lock = threading.Lock()
 
 def broadcast_user_list():
-    """向所有在线用户广播当前在线用户列表"""
     with lock:
         user_list = list(clients.keys())
         msg = json.dumps({"type": "user_list", "users": user_list})
@@ -22,7 +21,6 @@ def broadcast_user_list():
 def handle_client(conn, addr):
     username = None
     try:
-        # 1. 用户注册
         conn.sendall('请输入用户名: '.encode('utf-8'))
         username = conn.recv(1024).decode().strip()
         if not username:
@@ -38,30 +36,70 @@ def handle_client(conn, addr):
         broadcast_user_list()
         welcome_msg = '欢迎，当前在线用户: ' + ', '.join(clients.keys()) + '\n'
         conn.sendall(welcome_msg.encode('utf-8'))
-        # 2. 消息循环
         while True:
             data = conn.recv(4096)
             if not data:
                 break
-            try:
-                msg = json.loads(data.decode())
-                if msg.get('type') == 'msg':
-                    to_user = msg.get('to')
-                    content = msg.get('content')
-                    with lock:
-                        if to_user in clients:
-                            to_conn, _ = clients[to_user]
-                            to_conn.sendall(json.dumps({
-                                'type': 'msg',
-                                'from': username,
-                                'content': content
-                            }).encode() + b'\n')
-                        else:
-                            conn.sendall('目标用户不在线\n'.encode('utf-8'))
-                else:
-                    conn.sendall('未知消息类型\n'.encode('utf-8'))
-            except Exception as e:
-                conn.sendall(f'消息解析错误: {e}\n'.encode('utf-8'))
+            for line in data.split(b'\n'):
+                if not line.strip():
+                    continue
+                try:
+                    msg = json.loads(line.decode())
+                    if msg.get('type') == 'list':
+                        broadcast_user_list()
+                    elif msg.get('type') == 'key_exchange_request':
+                        to_user = msg.get('to')
+                        from_user = msg.get('from')
+                        pubkey = msg.get('pubkey')
+                        with lock:
+                            if to_user in clients:
+                                to_conn, _ = clients[to_user]
+                                # 通知对方有密钥交换请求
+                                to_conn.sendall(json.dumps({
+                                    "type": "key_exchange_request",
+                                    "from": from_user,
+                                    "pubkey": pubkey
+                                }).encode() + b'\n')
+                            else:
+                                conn.sendall('目标用户不在线\n'.encode('utf-8'))
+                    elif msg.get('type') == 'key_exchange_response':
+                        to_user = msg.get('to')
+                        from_user = username
+                        pubkey = msg.get('pubkey')
+                        with lock:
+                            if to_user in clients:
+                                to_conn, _ = clients[to_user]
+                                # 通知发起方密钥交换完成
+                                to_conn.sendall(json.dumps({
+                                    "type": "key_exchange_response",
+                                    "from": from_user,
+                                    "pubkey": pubkey
+                                }).encode() + b'\n')
+                                # 也通知被邀请方
+                                conn.sendall(json.dumps({
+                                    "type": "key_exchange_done",
+                                    "from": to_user,
+                                    "pubkey": pubkey
+                                }).encode() + b'\n')
+                            else:
+                                conn.sendall('目标用户不在线\n'.encode('utf-8'))
+                    elif msg.get('type') == 'msg':
+                        to_user = msg.get('to')
+                        content = msg.get('content')
+                        with lock:
+                            if to_user in clients:
+                                to_conn, _ = clients[to_user]
+                                to_conn.sendall(json.dumps({
+                                    'type': 'msg',
+                                    'from': username,
+                                    'content': content
+                                }).encode() + b'\n')
+                            else:
+                                conn.sendall('目标用户不在线\n'.encode('utf-8'))
+                    else:
+                        conn.sendall('未知消息类型\n'.encode('utf-8'))
+                except Exception as e:
+                    conn.sendall(f'消息解析错误: {e}\n'.encode('utf-8'))
     except Exception as e:
         print(f"[-] 用户 {username} 异常: {e}")
     finally:

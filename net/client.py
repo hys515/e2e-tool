@@ -1,41 +1,11 @@
 import socket
 import threading
 import json
-import sys
-import time
-from gmssl import sm2, func
 import os
+from gmssl import sm2, func
 
-SERVER_HOST = '127.0.0.1'  # 服务器地址
-SERVER_PORT = 50000        # 服务器端口
-
-
-def recv_thread(sock):
-    while True:
-        try:
-            data = sock.recv(4096)
-            if not data:
-                print("[系统] 服务器断开连接")
-                break
-            for line in data.split(b'\n'):
-                if not line.strip():
-                    continue
-                try:
-                    msg = json.loads(line.decode())
-                    if msg.get('type') == 'user_list':
-                        print(f"[系统] 在线用户: {', '.join(msg['users'])}")
-                    elif msg.get('type') == 'msg':
-                        print(f"[消息] 来自 {msg['from']}: {msg['content']}")
-                    else:
-                        print(f"[系统] {msg}")
-                except Exception:
-                    print("[系统] ", line.decode(errors='ignore'))
-        except Exception as e:
-            if isinstance(e, OSError) and e.errno == 9:
-                # 文件描述符关闭，属于正常退出
-                break
-            print(f"[错误] 接收消息异常: {e}")
-            break
+SERVER_HOST = '127.0.0.1'
+SERVER_PORT = 50000
 
 def ensure_sm2_keypair(username):
     key_dir = os.path.join(os.path.dirname(__file__), '..', 'keys')
@@ -44,7 +14,6 @@ def ensure_sm2_keypair(username):
     pub_path = os.path.join(key_dir, f"{username}_pub.hex")
     if not (os.path.exists(priv_path) and os.path.exists(pub_path)):
         print(f"[系统] 为用户 {username} 生成SM2密钥对...")
-        # 生成私钥（64位16进制字符串，32字节）
         private_key = func.random_hex(64)
         sm2_crypt = sm2.CryptSM2(public_key='', private_key=private_key)
         public_key = sm2_crypt._kg(int(private_key, 16), sm2.default_ecc_table['g'])
@@ -57,46 +26,120 @@ def ensure_sm2_keypair(username):
         priv = f.read()
     with open(pub_path, 'r') as f:
         pub = f.read()
-    print(f"[系统] 你的SM2私钥（hex，32字节）:\n{priv}")
-    print(f"[系统] 你的SM2公钥（hex，64字节）:\n{pub}")
-    return priv_path, pub_path
+    return priv, pub
+
+def get_session_key_path(me, peer):
+    base_dir = os.path.join(os.path.dirname(__file__), '..', 'session_keys')
+    os.makedirs(base_dir, exist_ok=True)
+    return os.path.join(base_dir, f"{me}_{peer}_session.key")
+
+def save_session_key(me, peer, session_key):
+    path = get_session_key_path(me, peer)
+    with open(path, 'w') as f:
+        f.write(session_key)
+
+def load_session_key(me, peer):
+    path = get_session_key_path(me, peer)
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return f.read()
+    return None
+
+def recv_thread(sock, username, state):
+    while True:
+        try:
+            data = sock.recv(4096)
+            if not data:
+                print("[系统] 服务器断开连接")
+                break
+            for line in data.split(b'\n'):
+                if not line.strip():
+                    continue
+                msg = json.loads(line.decode())
+                if msg.get('type') == 'user_list':
+                    print(f"[系统] 在线用户: {', '.join(msg['users'])}")
+                elif msg.get('type') == 'key_exchange_request':
+                    peer = msg['from']
+                    print(f"[系统] 收到来自 {peer} 的密钥交换请求，正在协商...")
+                    priv, pub = ensure_sm2_keypair(username)
+                    # 发送自己的公钥
+                    resp = {
+                        "type": "key_exchange_response",
+                        "to": peer,
+                        "pubkey": pub
+                    }
+                    sock.sendall((json.dumps(resp) + '\n').encode())
+                    # 保存对方公钥
+                    state['pending_peer'] = peer
+                elif msg.get('type') == 'key_exchange_response':
+                    peer = msg['from']
+                    peer_pub = msg['pubkey']
+                    priv, pub = ensure_sm2_keypair(username)
+                    sm2_crypt = sm2.CryptSM2(public_key=peer_pub, private_key=priv)
+                    session_key = sm2_crypt._kg(int(priv, 16), peer_pub)[:32]
+                    save_session_key(username, peer, session_key)
+                    print(f"[系统] 与 {peer} 的会话密钥协商完成，可以通话了。")
+                    state['session_peer'] = peer
+                elif msg.get('type') == 'key_exchange_done':
+                    peer = msg['from']
+                    peer_pub = msg['pubkey']
+                    priv, pub = ensure_sm2_keypair(username)
+                    sm2_crypt = sm2.CryptSM2(public_key=peer_pub, private_key=priv)
+                    session_key = sm2_crypt._kg(int(priv, 16), peer_pub)[:32]
+                    save_session_key(username, peer, session_key)
+                    print(f"[系统] {peer} 已与你建立密钥，可以通话了。")
+                    state['session_peer'] = peer
+                elif msg.get('type') == 'msg':
+                    print(f"[{msg['from']}] {msg['content']}")
+                else:
+                    print(f"[系统] {msg}")
+        except Exception as e:
+            print(f"[错误] 接收消息异常: {e}")
+            break
 
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect((SERVER_HOST, SERVER_PORT))
-        # 注册用户名
         prompt = sock.recv(1024).decode()
         username = input(prompt)
         sock.sendall((username + '\n').encode())
-        ensure_sm2_keypair(username)
-        # 启动接收线程
-        threading.Thread(target=recv_thread, args=(sock,), daemon=True).start()
-        # 主循环
+        priv, pub = ensure_sm2_keypair(username)
+        state = {'session_peer': None, 'pending_peer': None}
+        threading.Thread(target=recv_thread, args=(sock, username, state), daemon=True).start()
         while True:
-            try:
-                cmd = input("[你] > ").strip()
-                if cmd == 'exit':
-                    print("[系统] 退出客户端")
-                    break
-                elif cmd == 'list':
-                    # 服务器会自动推送在线用户列表
+            cmd = input("> ").strip()
+            if cmd == "list":
+                sock.sendall((json.dumps({"type": "list"}) + '\n').encode())
+            elif cmd.startswith("connect "):
+                peer = cmd.split(" ", 1)[1]
+                if peer == username:
+                    print("[系统] 不能和自己建立会话")
                     continue
-                elif cmd.startswith('msg '):
-                    # 发送消息: msg <用户名> <内容>
-                    parts = cmd.split(' ', 2)
-                    if len(parts) < 3:
-                        print("用法: msg <用户名> <内容>")
-                        continue
-                    to_user, content = parts[1], parts[2]
-                    msg = json.dumps({'type': 'msg', 'to': to_user, 'content': content})
-                    sock.sendall(msg.encode())
+                session_key = load_session_key(username, peer)
+                if session_key:
+                    print(f"[系统] 加载已有的会话密钥，可以直接通话。")
+                    state['session_peer'] = peer
                 else:
-                    print("[系统] 支持命令: list, msg <用户名> <内容>, exit")
-            except Exception as e:
-                print(f"[错误] {e}")
-                break
-    sock.close()
-    time.sleep(0.1)  # 给接收线程一点时间退出
+                    msg = {"type": "key_exchange_request", "to": peer, "from": username, "pubkey": pub}
+                    sock.sendall((json.dumps(msg) + '\n').encode())
+                    print(f"[系统] 已向 {peer} 发起密钥交换请求，请等待对方响应...")
+            elif cmd == "exit":
+                if state['session_peer']:
+                    print(f"[系统] 已退出与 {state['session_peer']} 的会话")
+                    state['session_peer'] = None
+                else:
+                    print("[系统] 当前未处于会话中")
+            elif state['session_peer']:
+                # 发送消息
+                msg = {
+                    "type": "msg",
+                    "to": state['session_peer'],
+                    "from": username,
+                    "content": cmd
+                }
+                sock.sendall((json.dumps(msg) + '\n').encode())
+            else:
+                print("[系统] 请输入 'list' 查看在线用户，或 'connect <用户名>' 建立会话")
 
 if __name__ == "__main__":
     main() 
