@@ -44,18 +44,15 @@ def ensure_sm2_keypair(username):
     pub_path = os.path.join(key_dir, f"{username}_pub.hex")
     if not (os.path.exists(priv_path) and os.path.exists(pub_path)):
         print(f"[系统] 为用户 {username} 生成SM2密钥对...")
-        # 生成私钥（32字节16进制）
-        private_key = func.random_hex(sm2.default_ecc_table['n'])
-        # 生成公钥（64字节16进制）
+        # 生成私钥（64位16进制字符串，32字节）
+        private_key = func.random_hex(64)
         sm2_crypt = sm2.CryptSM2(public_key='', private_key=private_key)
         public_key = sm2_crypt._kg(int(private_key, 16), sm2.default_ecc_table['g'])
-        # 保存
         with open(priv_path, 'w') as f:
             f.write(private_key)
         with open(pub_path, 'w') as f:
             f.write(public_key)
         print(f"[系统] 已为 {username} 生成SM2密钥对")
-    # 回显密钥内容
     with open(priv_path, 'r') as f:
         priv = f.read()
     with open(pub_path, 'r') as f:

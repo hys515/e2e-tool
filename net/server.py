@@ -78,9 +78,15 @@ def main():
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((HOST, PORT))
         s.listen()
-        while True:
-            conn, addr = s.accept()
-            threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
+        try:
+            while True:
+                conn, addr = s.accept()
+                threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
+        except KeyboardInterrupt:
+            print("\n[Server] 收到退出信号，正在优雅关闭...")
+        finally:
+            s.close()
+            print("[Server] 已关闭 socket，退出。")
 
 if __name__ == "__main__":
     main()
