@@ -3,6 +3,7 @@ import threading
 import json
 import os
 from gmssl import sm2, func
+import errno
 
 SERVER_HOST = '127.0.0.1'
 SERVER_PORT = 50000
@@ -55,22 +56,24 @@ def recv_thread(sock, username, state):
             for line in data.split(b'\n'):
                 if not line.strip():
                     continue
-                msg = json.loads(line.decode())
+                try:
+                    msg = json.loads(line.decode())
+                except Exception:
+                    # 跳过非JSON行
+                    continue
                 if msg.get('type') == 'user_list':
                     print(f"[系统] 在线用户: {', '.join(msg['users'])}")
                 elif msg.get('type') == 'key_exchange_request':
                     peer = msg['from']
                     print(f"[系统] 收到来自 {peer} 的密钥交换请求，正在协商...")
                     priv, pub = ensure_sm2_keypair(username)
-                    # 发送自己的公钥
                     resp = {
                         "type": "key_exchange_response",
                         "to": peer,
                         "pubkey": pub
                     }
                     sock.sendall((json.dumps(resp) + '\n').encode())
-                    # 保存对方公钥
-                    state['pending_peer'] = peer
+                    state['session_peer'] = peer
                 elif msg.get('type') == 'key_exchange_response':
                     peer = msg['from']
                     peer_pub = msg['pubkey']
@@ -80,19 +83,16 @@ def recv_thread(sock, username, state):
                     save_session_key(username, peer, session_key)
                     print(f"[系统] 与 {peer} 的会话密钥协商完成，可以通话了。")
                     state['session_peer'] = peer
-                elif msg.get('type') == 'key_exchange_done':
-                    peer = msg['from']
-                    peer_pub = msg['pubkey']
-                    priv, pub = ensure_sm2_keypair(username)
-                    sm2_crypt = sm2.CryptSM2(public_key=peer_pub, private_key=priv)
-                    session_key = sm2_crypt._kg(int(priv, 16), peer_pub)[:32]
-                    save_session_key(username, peer, session_key)
-                    print(f"[系统] {peer} 已与你建立密钥，可以通话了。")
-                    state['session_peer'] = peer
                 elif msg.get('type') == 'msg':
                     print(f"[{msg['from']}] {msg['content']}")
                 else:
                     print(f"[系统] {msg}")
+        except OSError as e:
+            if e.errno == errno.EBADF:  # 9
+                # socket 已关闭，属于正常退出
+                break
+            print(f"[错误] 接收消息异常: {e}")
+            break
         except Exception as e:
             print(f"[错误] 接收消息异常: {e}")
             break
@@ -104,7 +104,7 @@ def main():
         username = input(prompt)
         sock.sendall((username + '\n').encode())
         priv, pub = ensure_sm2_keypair(username)
-        state = {'session_peer': None, 'pending_peer': None}
+        state = {'session_peer': None}
         threading.Thread(target=recv_thread, args=(sock, username, state), daemon=True).start()
         while True:
             cmd = input("> ").strip()
@@ -118,19 +118,22 @@ def main():
                 session_key = load_session_key(username, peer)
                 if session_key:
                     print(f"[系统] 加载已有的会话密钥，可以直接通话。")
-                    state['session_peer'] = peer
                 else:
                     msg = {"type": "key_exchange_request", "to": peer, "from": username, "pubkey": pub}
                     sock.sendall((json.dumps(msg) + '\n').encode())
-                    print(f"[系统] 已向 {peer} 发起密钥交换请求，请等待对方响应...")
-            elif cmd == "exit":
+                    print(f"[系统] 已向 {peer} 发起密钥交换请求。")
+                state['session_peer'] = peer
+            elif cmd == "leave":
                 if state['session_peer']:
                     print(f"[系统] 已退出与 {state['session_peer']} 的会话")
                     state['session_peer'] = None
                 else:
                     print("[系统] 当前未处于会话中")
+            elif cmd in ("quit", "logout"):
+                print("[系统] 退出客户端")
+                sock.close()
+                break
             elif state['session_peer']:
-                # 发送消息
                 msg = {
                     "type": "msg",
                     "to": state['session_peer'],
@@ -139,7 +142,7 @@ def main():
                 }
                 sock.sendall((json.dumps(msg) + '\n').encode())
             else:
-                print("[系统] 请输入 'list' 查看在线用户，或 'connect <用户名>' 建立会话")
+                print("[系统] 请输入 'list' 查看在线用户，或 'connect <用户名>' 建立会话，'leave' 退出会话，'quit' 退出客户端")
 
 if __name__ == "__main__":
     main() 

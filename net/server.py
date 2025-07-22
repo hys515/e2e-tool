@@ -46,7 +46,9 @@ def handle_client(conn, addr):
                 try:
                     msg = json.loads(line.decode())
                     if msg.get('type') == 'list':
-                        broadcast_user_list()
+                        # 只回复请求者
+                        user_list = list(clients.keys())
+                        conn.sendall(json.dumps({"type": "user_list", "users": user_list}).encode() + b'\n')
                     elif msg.get('type') == 'key_exchange_request':
                         to_user = msg.get('to')
                         from_user = msg.get('from')
@@ -121,7 +123,7 @@ def main():
                 conn, addr = s.accept()
                 threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
         except KeyboardInterrupt:
-            print("\n[Server] 收到退出信号，正在优雅关闭...")
+            print("\n[Server] 收到退出信号，正在关闭...")
         finally:
             s.close()
             print("[Server] 已关闭 socket，退出。")
