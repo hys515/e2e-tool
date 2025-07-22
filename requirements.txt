@@ -1,3 +1,4 @@
+gmalg==1.0.6
 gmssl==3.2.2
 imageio==2.37.0
 lazy_loader==0.4
