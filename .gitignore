@@ -14,6 +14,7 @@ test/test_sm2_ecdh.exe
 # 密钥和证书文件
 *.pem
 *.key
+*.hex
 
 # 加密文件
 *.zuc
