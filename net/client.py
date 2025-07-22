@@ -209,12 +209,52 @@ def main():
         state = {'session_peer': None}
         threading.Thread(target=recv_thread, args=(sock, username, state), daemon=True).start()
         while True:
-            msg = input()
+            msg = input("> ").strip()
             if msg in ("quit", "exit"):
                 print("[系统] 退出客户端")
                 sock.close()
                 break
-            if state['session_peer']:
+            elif msg.startswith("sendfile "):
+                # 用法: sendfile <filepath> <filetype>
+                try:
+                    _, filepath, filetype = msg.split()
+                    send_file(sock, filepath, filetype, username, state['session_peer'])
+                except Exception as e:
+                    print(f"[系统] 用法: sendfile <filepath> <filetype>，错误: {e}")
+                continue
+            elif msg == "sendmsg":
+                # 1. 选择隐写类型
+                carrier_type = input("请选择隐写类型（image/pdf/video）: ").strip()
+                # 2. 输入原始载体文件路径
+                input_path = input("请输入原始载体文件路径: ").strip()
+                # 3. 输入隐写输出文件路径
+                output_path = input("请输入隐写输出文件路径: ").strip()
+                # 4. 输入明文
+                plaintext = input("请输入要发送的明文消息: ").strip()
+                # 5. 加密
+                session_key = load_session_key(username, state['session_peer'])
+                ciphertext = encrypt_message(session_key, plaintext)
+                # 6. 隐写
+                from hide.steg import embed_message
+                embed_message(carrier_type, input_path, output_path, ciphertext.encode())
+                # 7. 发送文件
+                send_file(sock, output_path, carrier_type, username, state['session_peer'])
+                continue
+            elif msg == "extractmsg":
+                # 1. 选择隐写类型
+                carrier_type = input("请选择隐写类型（image/pdf/video）: ").strip()
+                # 2. 输入隐写文件路径
+                stego_path = input("请输入隐写文件路径: ").strip()
+                # 3. 提取密文
+                from hide.steg import extract_message
+                ciphertext = extract_message(carrier_type, stego_path)
+                # 4. 解密
+                session_key = load_session_key(username, state['session_peer'])
+                plaintext = decrypt_message(session_key, ciphertext.decode())
+                print(f"[系统] 解密得到明文: {plaintext}")
+                continue
+            elif state['session_peer']:
+                # 发送普通加密消息
                 session_key = load_session_key(username, state['session_peer'])
                 encrypted = encrypt_message(session_key, msg)
                 msg_obj = {

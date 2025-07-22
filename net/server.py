@@ -1,5 +1,6 @@
 import socket
 import threading
+import json
 
 HOST = '0.0.0.0'
 PORT = 50000
@@ -35,6 +36,7 @@ def handle_client(conn, addr):
         with lock:
             if len(clients) == 2:
                 users = list(clients.keys())
+                print(f"[调试] 会话建立: {users[0]} <-> {users[1]}")
                 for user in users:
                     c, _ = clients[user]
                     peer = users[1] if user == users[0] else users[0]
@@ -47,35 +49,70 @@ def handle_client(conn, addr):
                     print(f"[调试] 向 {user} 索要公钥，对方为 {peer}")
                     c.sendall(f"[PEER_PUBKEY]:{peer}\n".encode())
         # 主消息循环
+        buffer = b''
         while True:
             data = conn.recv(4096)
             if not data:
                 break
-            msg = data.decode().strip()
-            if msg.startswith("[PUBKEY]"):
-                # [PUBKEY]username:pubkey
-                _, rest = msg.split("]", 1)
-                user, pub = rest.split(":", 1)
-                print(f"[调试] 收到 {user} 的公钥上报: {pub[:6]}...")
-                with lock:
-                    pubkeys[user] = pub
-                    print(f"[调试] 当前已上报公钥用户: {[u[:6] for u in pubkeys.keys()]}")
-                    # 如果两人都已上报公钥，通知双方进行密钥交换
-                    if len(pubkeys) == 2:
-                        users = list(pubkeys.keys())
-                        for u in users:
-                            c, _ = clients[u]
-                            peer = users[1] if u == users[0] else users[0]
-                            peer_pub = pubkeys[peer]
-                            print(f"[调试] 向 {u} 发送 [KEYEXCHANGE]，peer={peer[:6]}, peer_pub={peer_pub[:6]}...")
-                            c.sendall(f"[KEYEXCHANGE]:{peer}:{peer_pub}\n".encode())
-            else:
-                # 普通消息转发
-                with lock:
-                    for user, (c, _) in clients.items():
-                        if user != username:
-                            print(f"[调试] 转发消息 [{username[:6]}] -> [{user[:6]}]: {msg}")
-                            c.sendall(f"[{username}] {msg}\n".encode())
+            buffer += data
+            # 检查是否为文件头（JSON + \n）
+            while b'\n' in buffer:
+                line, buffer = buffer.split(b'\n', 1)
+                msg = line.strip().decode(errors='ignore')
+                try:
+                    msg_obj = json.loads(msg)
+                    if msg_obj.get('type') == 'msg':
+                        print(f"[调试] {username} 发送加密消息给 {msg_obj['to']}")
+                        # 转发加密消息
+                        with lock:
+                            for user, (c, _) in clients.items():
+                                if user == msg_obj['to']:
+                                    print(f"[调试] 转发加密消息 [{username}] -> [{user}]")
+                                    c.sendall((json.dumps(msg_obj) + '\n').encode())
+                    elif msg_obj.get('type') == 'file':
+                        print(f"[调试] {username} 发送隐写文件 {msg_obj['filename']} ({msg_obj['filetype']}, {msg_obj['filesize']}字节) 给 {msg_obj['to']}")
+                        # 文件头已收到，开始转发文件体
+                        with lock:
+                            for user, (c, _) in clients.items():
+                                if user == msg_obj['to']:
+                                    print(f"[调试] 转发文件头 [{username}] -> [{user}]")
+                                    c.sendall((json.dumps(msg_obj) + '\n').encode())
+                                    # 读取并转发文件体
+                                    remaining = msg_obj['filesize']
+                                    print(f"[调试] 开始转发文件体，共 {remaining} 字节")
+                                    while remaining > 0:
+                                        chunk = conn.recv(min(4096, remaining))
+                                        if not chunk:
+                                            break
+                                        c.sendall(chunk)
+                                        remaining -= len(chunk)
+                                    print(f"[调试] 文件体转发完成 [{username}] -> [{user}]")
+                    else:
+                        print(f"[调试] {username} 发送未知类型JSON消息: {msg_obj}")
+                except Exception:
+                    # 非JSON，可能是密钥交换、普通文本等
+                    if msg.startswith("[PUBKEY]"):
+                        _, rest = msg.split("]", 1)
+                        user, pub = rest.split(":", 1)
+                        print(f"[调试] 收到 {user} 的公钥上报: {pub[:6]}...")
+                        with lock:
+                            pubkeys[user] = pub
+                            print(f"[调试] 当前已上报公钥用户: {[u[:6] for u in pubkeys.keys()]}")
+                            if len(pubkeys) == 2:
+                                users = list(pubkeys.keys())
+                                for u in users:
+                                    c, _ = clients[u]
+                                    peer = users[1] if u == users[0] else users[0]
+                                    peer_pub = pubkeys[peer]
+                                    print(f"[调试] 向 {u} 发送 [KEYEXCHANGE]，peer={peer[:6]}, peer_pub={peer_pub[:6]}...")
+                                    c.sendall(f"[KEYEXCHANGE]:{peer}:{peer_pub}\n".encode())
+                    else:
+                        # 普通消息转发
+                        with lock:
+                            for user, (c, _) in clients.items():
+                                if user != username:
+                                    print(f"[调试] 转发消息 [{username[:6]}] -> [{user[:6]}]: {msg}")
+                                    c.sendall(f"[{username}] {msg}\n".encode())
     except Exception as e:
         print(f"[调试] 用户 {username} 异常: {e}")
     finally:
@@ -84,7 +121,6 @@ def handle_client(conn, addr):
                 del clients[username]
             if username and username in pubkeys:
                 del pubkeys[username]
-            # 通知对方下线
             for user, (c, _) in clients.items():
                 print(f"[调试] 通知 {user}，{username} 已下线")
                 c.sendall(f"[系统] {username} 已下线，会话结束。\n".encode('utf-8'))
