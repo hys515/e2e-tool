@@ -132,7 +132,7 @@ def recv_thread(sock, username, state):
             if not data:
                 print("[系统] 服务器断开连接")
                 break
-            buffer += data.decode()
+            buffer += data.decode(errors='ignore')
             while '\n' in buffer:
                 line, buffer = buffer.split('\n', 1)
                 msg = line.strip()
@@ -162,7 +162,9 @@ def recv_thread(sock, username, state):
                             peer = msg_obj['from'] if not peer_prefix else peer_prefix
                             save_dir = os.path.join(os.path.dirname(__file__), '..', 'received_files')
                             os.makedirs(save_dir, exist_ok=True)
+                            # 立即接收文件体并清空buffer，避免decode二进制内容
                             recv_file(sock, save_dir)
+                            buffer = ""
                         else:
                             print(f"[系统] 未知JSON消息: {msg_obj}")
                     except Exception:
