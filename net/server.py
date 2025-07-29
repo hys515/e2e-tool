@@ -59,7 +59,7 @@ def handle_client(conn, addr):
             while b'\n' in buffer:
                 line, buffer = buffer.split(b'\n', 1)
                 msg = line.strip().decode(errors='ignore')
-                try:
+                try:                                            
                     msg_obj = json.loads(msg)
                     if msg_obj.get('type') == 'msg':
                         print(f"[调试] {username} 发送加密消息给 {msg_obj['to']}")

@@ -38,6 +38,7 @@ hide/extracted/*
 !hide/extracted/images/.gitkeep
 !hide/extracted/pdfs/.gitkeep
 !hide/extracted/videos/.gitkeep
+received_files/*
 
 # 测试数据
 test/data/*

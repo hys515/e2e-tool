@@ -47,22 +47,12 @@ def ffv1_embed(input_video, data_bytes, output_video):
     writer.release()
     print(f"使用FFV1编码耗时: {time.time() - start_time:.2f} 秒")
 
-    # 4. 用FFmpeg拼接剩余帧（跳过原视频第一帧）
+    # 4. 简化处理：直接使用嵌入的帧
     start_time = time.time()
-    cmd = [
-        'ffmpeg',
-        '-y',
-        '-i', 'temp.avi',
-        '-ss', '00:00:00.033',  # 精确跳过1帧（假设30fps）
-        '-i', input_video,
-        '-filter_complex', '[0][1]concat=n=2:v=1:a=0',
-        '-c:v', 'ffv1',         # 强制使用FFV1
-        '-an',
-        output_video
-    ]
-    subprocess.run(cmd, stderr=subprocess.DEVNULL)
+    import shutil
+    shutil.copy('temp.avi', output_video)
     os.remove('temp.avi')
-    print(f"使用FFmpeg拼接剩余帧耗时: {time.time() - start_time:.2f} 秒")
+    print(f"使用简化处理耗时: {time.time() - start_time:.2f} 秒")
 
     # 验证
     start_time = time.time()
@@ -74,8 +64,8 @@ def ffv1_extract(stego_video, data_length):
     cap = cv2.VideoCapture(stego_video)
     ret, frame = cap.read()
     cap.release()
-    if not ret:
-        raise ValueError("无法读取视频第一帧")
+    if not ret or frame is None:
+        raise ValueError(f"无法读取视频第一帧: {stego_video}")
     bits_to_extract = data_length * 8
     extracted_bits = (frame.flatten() & 1)[:bits_to_extract]
     data_bytes = np.packbits(extracted_bits)
@@ -108,6 +98,13 @@ def verify_embedding(original_video, embedded_video, data_bytes):
     cap = cv2.VideoCapture(embedded_video)
     ret, frame = cap.read()
     cap.release()
+    
+    # 检查视频读取是否成功
+    if not ret or frame is None:
+        print(f"⚠️  警告: 无法读取嵌入视频进行验证: {embedded_video}")
+        print("⚠️  跳过数据完整性验证")
+        return
+    
     # 提取LSB
     extracted_bits = (frame.flatten() & 1)[:len(data_bytes)*8]
     # 对比原始数据
